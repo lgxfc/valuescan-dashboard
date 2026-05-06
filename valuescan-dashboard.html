@@ -1,0 +1,765 @@
+<!doctype html>
+  <html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ValueScan 模拟交易看板</title>
+    <style>
+      :root {
+        --bg: #09101d;
+        --bg2: #0f1830;
+        --panel: rgba(16, 24, 49, 0.92);
+        --panel2: rgba(13, 20, 42, 0.98);
+        --text: #edf2ff;
+        --muted: #99a6c7;
+        --line: #243457;
+        --green: #27d17f;
+        --green-bg: rgba(39, 209, 127, 0.14);
+        --red: #ff6f7d;
+        --red-bg: rgba(255, 111, 125, 0.14);
+        --yellow: #ffd166;
+        --blue: #68a9ff;
+        --shadow: 0 18px 40px rgba(0,0,0,.30);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; padding: 24px; color: var(--text);
+        background: radial-gradient(circle at top left, rgba(104,169,255,.16), transparent 28%), radial-gradient(circle at top right, rgba(39,209,127,.10), transparent 24%), linear-gradient(180deg, var(--bg), var(--bg2));
+        font: 14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+      }
+      .wrap { max-width: 1520px; margin: 0 auto; }
+      .hero { display: flex; justify-content: space-between; gap: 20px; align-items: flex-end; margin-bottom: 18px; }
+      h1 { margin: 0 0 8px; font-size: 30px; }
+      .sub { color: var(--muted); }
+      .hero-note { padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.03); color: var(--muted); white-space: nowrap; }
+      .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 20px; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); backdrop-filter: blur(10px); }
+      .accent-green { box-shadow: inset 0 0 0 1px rgba(39,209,127,.16), var(--shadow); }
+      .accent-red { box-shadow: inset 0 0 0 1px rgba(255,111,125,.16), var(--shadow); }
+      .accent-blue { box-shadow: inset 0 0 0 1px rgba(104,169,255,.16), var(--shadow); }
+      .k { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+      .v { font-size: 28px; font-weight: 800; letter-spacing: .3px; }
+      .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+      .section { margin-top: 22px; }
+      .section h2 { font-size: 18px; margin: 0 0 12px; }
+      .tokens { display: flex; flex-wrap: wrap; gap: 8px; }
+      .token, .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 5px 10px; font-weight: 700; }
+      .token.bull { background: rgba(39,209,127,.12); color: #7ef0b6; border: 1px solid rgba(39,209,127,.28); }
+      .token.bear { background: rgba(255,111,125,.12); color: #ffadb5; border: 1px solid rgba(255,111,125,.28); }
+      .token.alpha-fomo { background: rgba(255,209,102,.15); color: #ffe58f; border: 1px solid rgba(255,209,102,.35); }
+      .badge.long { background: var(--green-bg); color: #79efb0; }
+      .badge.short { background: var(--red-bg); color: #ffacb4; }
+      .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      table { width: 100%; border-collapse: collapse; overflow: hidden; background: var(--panel2); border: 1px solid var(--line); border-radius: 18px; }
+      th, td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+      th { color: var(--muted); font-weight: 700; background: rgba(255,255,255,.02); }
+      tr:hover td { background: rgba(255,255,255,.025); }
+      .empty { color: var(--muted); text-align: center; padding: 24px; }
+      .up { color: var(--green); }
+      .down { color: var(--red); }
+      .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 14px; }
+      .mini { padding: 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255,255,255,.025); }
+      .mini .label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+      .mini .value { font-size: 20px; font-weight: 800; }
+      @media (max-width: 1250px) { .grid { grid-template-columns: repeat(3, 1fr); } .stat-row { grid-template-columns: repeat(2, 1fr); } }
+      @media (max-width: 860px) { .hero, .two-col, .grid, .stat-row { grid-template-columns: 1fr; display: grid; } .hero { align-items: stretch; } .hero-note { white-space: normal; } table { display: block; overflow-x: auto; } }
+      @media (max-width: 560px) { body { padding: 14px; } .grid, .stat-row { grid-template-columns: 1fr; } .v { font-size: 24px; } h1 { font-size: 24px; } }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="hero">
+        <div>
+          <h1>ValueScan 模拟交易看板</h1>
+          <div class="sub">最后更新：2026/05/06 11:06:02 ｜ 规则：看涨新增开 100U 多单，看跌新增开 100U 空单，Alpha+FOMO 开多单，下榜平仓</div>
+        </div>
+        <div class="hero-note">同步目标：工作区 / Windows桌面</div>
+      </div>
+
+      <div class="grid">
+        <div class="card accent-green"><div class="k">机会看涨数量</div><div class="v up">38</div><div class="hint">当前看涨池</div></div>
+        <div class="card accent-red"><div class="k">机会看跌数量</div><div class="v down">15</div><div class="hint">当前看跌池</div></div>
+        <div class="card accent-blue"><div class="k">当前持仓</div><div class="v">11</div><div class="hint">多 5 / 空 6</div></div>
+        <div class="card"><div class="k">持仓总名义</div><div class="v">1100.00U</div><div class="hint">按每单 100U</div></div>
+        <div class="card accent-blue"><div class="k">当前持仓市值</div><div class="v">1086.46U</div><div class="hint">按最新列表价格估算</div></div>
+        <div class="card accent-green"><div class="k">已实现收益</div><div class="v down">-53.26U</div><div class="hint">只统计已平仓</div></div>
+      </div>
+
+      <div class="stat-row">
+        <div class="mini"><div class="label">当前浮动盈亏</div><div class="value up">+12.17U</div></div>
+        <div class="mini"><div class="label">当前浮动收益率</div><div class="value up">+1.11%</div></div>
+        <div class="mini"><div class="label">最佳单笔</div><div class="value up">KNC +19.16U</div></div>
+        <div class="mini"><div class="label">最差单笔</div><div class="value down">BAS -9.98U</div></div>
+      </div>
+
+      <div class="stat-row">
+        <div class="mini"><div class="label">平仓胜率</div><div class="value down">+27.50%</div></div>
+        <div class="mini"><div class="label">累计已平仓</div><div class="value">40</div></div>
+        <div class="mini"><div class="label">胜 / 负</div><div class="value">11 / 28</div></div>
+        <div class="mini"><div class="label">实验状态</div><div class="value">运行中</div></div>
+      </div>
+
+      <div class="two-col section">
+        <div class="card">
+          <h2>机会看涨列表</h2>
+          <div class="tokens"><span class="token bull">ZEC</span><span class="token bull">SOL</span><span class="token bull">BTC</span><span class="token bull">HYPE</span><span class="token bull">ETH</span><span class="token bull">DASH</span><span class="token bull">ARB</span><span class="token bull">PENGU</span><span class="token bull">BNB</span><span class="token bull">SUI</span><span class="token bull">LTC</span><span class="token bull">CAKE</span><span class="token bull">VIRTUAL</span><span class="token bull">BCH</span><span class="token bull">UNI</span><span class="token bull">AVAX</span><span class="token bull">FLOKI</span><span class="token bull">BNSOL</span><span class="token bull">ENS</span><span class="token bull">ALCH</span><span class="token bull">RUNE</span><span class="token bull">XVS</span><span class="token bull">SKL</span><span class="token bull">ME</span><span class="token bull">GUA</span><span class="token bull">NAORIS</span><span class="token bull">REZ</span><span class="token bull">KAITO</span><span class="token bull">LINEA</span><span class="token bull">AMP</span><span class="token bull">DOGE</span><span class="token bull">FLOW</span><span class="token bull">SKYAI</span><span class="token bull">BR</span><span class="token bull">GPS</span><span class="token bull">MAGMA</span><span class="token bull">SPK</span><span class="token bull">ACX</span></div>
+        </div>
+        <div class="card">
+          <h2>机会看跌列表</h2>
+          <div class="tokens"><span class="token bear">TRUTH</span><span class="token bear">RESOLV</span><span class="token bear">STO</span><span class="token bear">WET</span><span class="token bear">BLUR</span><span class="token bear">SOON</span><span class="token bear">STABLE</span><span class="token bear">APE</span><span class="token bear">CROSS</span><span class="token bear">SPACE</span><span class="token bear">H</span><span class="token bear">PNUT</span><span class="token bear">ZBT</span><span class="token bear">AXL</span><span class="token bear">EUL</span></div>
+        </div>
+        <div class="card">
+          <h2>Alpha+FOMO 异动做多</h2>
+          <div class="tokens"><span class="token alpha-fomo">LAB</span><span class="token alpha-fomo">SKYAI</span><span class="token alpha-fomo">FIL</span></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>当前持仓</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>币种</th><th>方向</th><th>名义金额</th><th>开仓价</th><th>现价</th><th>当前市值</th><th>浮盈亏</th><th>浮动收益率</th><th>数量</th><th>开仓时间</th><th>来源</th>
+            </tr>
+          </thead>
+          <tbody>
+    <tr>
+      <td>APE</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.1763</td>
+      <td>0.1601</td>
+      <td>90.81U</td>
+      <td class="up">+9.19U</td>
+      <td class="up">+9.19%</td>
+      <td>567.215</td>
+      <td>2026/05/03 08:33:02</td>
+      <td>bearish_add</td>
+    </tr>
+    <tr>
+      <td>CROSS</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.10395</td>
+      <td>0.10188</td>
+      <td>98.01U</td>
+      <td class="up">+1.99U</td>
+      <td class="up">+1.99%</td>
+      <td>962.001</td>
+      <td>2026/05/03 21:03:01</td>
+      <td>bearish_add</td>
+    </tr>
+    <tr>
+      <td>GPS</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.00769</td>
+      <td>0.00803</td>
+      <td>104.42U</td>
+      <td class="up">+4.42U</td>
+      <td class="up">+4.42%</td>
+      <td>13003.9012</td>
+      <td>2026/05/04 12:33:02</td>
+      <td>bullish_add</td>
+    </tr>
+    <tr>
+      <td>SPACE</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.007723</td>
+      <td>0.00791</td>
+      <td>102.42U</td>
+      <td class="down">-2.42U</td>
+      <td class="down">-2.42%</td>
+      <td>12948.3361</td>
+      <td>2026/05/04 12:33:02</td>
+      <td>bearish_add</td>
+    </tr>
+    <tr>
+      <td>H</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.19463</td>
+      <td>0.20063</td>
+      <td>103.08U</td>
+      <td class="down">-3.08U</td>
+      <td class="down">-3.08%</td>
+      <td>513.7954</td>
+      <td>2026/05/05 02:33:02</td>
+      <td>bearish_add</td>
+    </tr>
+    <tr>
+      <td>MAGMA</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.24592</td>
+      <td>0.24872</td>
+      <td>101.14U</td>
+      <td class="up">+1.14U</td>
+      <td class="up">+1.14%</td>
+      <td>406.6363</td>
+      <td>2026/05/05 09:03:01</td>
+      <td>bullish_add</td>
+    </tr>
+    <tr>
+      <td>ZBT</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.2</td>
+      <td>0.1907</td>
+      <td>95.35U</td>
+      <td class="up">+4.65U</td>
+      <td class="up">+4.65%</td>
+      <td>500</td>
+      <td>2026/05/05 09:03:01</td>
+      <td>bearish_add</td>
+    </tr>
+    <tr>
+      <td>SPK</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.037452</td>
+      <td>0.035814</td>
+      <td>95.63U</td>
+      <td class="down">-4.37U</td>
+      <td class="down">-4.37%</td>
+      <td>2670.0844</td>
+      <td>2026/05/05 09:33:01</td>
+      <td>bullish_add</td>
+    </tr>
+    <tr>
+      <td>AXL</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.079</td>
+      <td>0.077</td>
+      <td>97.47U</td>
+      <td class="up">+2.53U</td>
+      <td class="up">+2.53%</td>
+      <td>1265.8228</td>
+      <td>2026/05/05 09:33:01</td>
+      <td>bearish_add</td>
+    </tr>
+    <tr>
+      <td>ACX</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.0445</td>
+      <td>0.0448</td>
+      <td>100.67U</td>
+      <td class="up">+0.67U</td>
+      <td class="up">+0.67%</td>
+      <td>2247.191</td>
+      <td>2026/05/05 11:03:01</td>
+      <td>bullish_add</td>
+    </tr>
+    <tr>
+      <td>SKYAI</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.79391</td>
+      <td>0.7737</td>
+      <td>97.45U</td>
+      <td class="down">-2.55U</td>
+      <td class="down">-2.55%</td>
+      <td>125.9589</td>
+      <td>2026/05/06 09:41:01</td>
+      <td>alpha_fomo</td>
+    </tr></tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <h2>历史平仓记录</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>币种</th><th>方向</th><th>名义金额</th><th>开仓价</th><th>平仓价</th><th>收益</th><th>收益率</th><th>开仓时间</th><th>平仓时间</th><th>原因</th>
+            </tr>
+          </thead>
+          <tbody>
+    <tr>
+      <td>APE</td>
+      <td><span class="badge short">空</span></td>
+      <td>30.00U</td>
+      <td>0.1763</td>
+      <td>0.1585</td>
+      <td class="up">+3.03U</td>
+      <td class="up">+10.10%</td>
+      <td>2026/05/03 08:33:02</td>
+      <td>2026/05/06 07:31:02</td>
+      <td>达到第 1 档止盈，减仓 30%</td>
+    </tr>
+    <tr>
+      <td>MERL</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.0391</td>
+      <td>0.04188</td>
+      <td class="down">-7.11U</td>
+      <td class="down">-7.11%</td>
+      <td>2026/05/05 09:03:01</td>
+      <td>2026/05/06 00:21:00</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>GWEI</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.10991</td>
+      <td>0.11739</td>
+      <td class="down">-6.81U</td>
+      <td class="down">-6.81%</td>
+      <td>2026/05/05 14:03:02</td>
+      <td>2026/05/05 21:21:02</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>PNUT</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.0595</td>
+      <td>0.063</td>
+      <td class="down">-5.88U</td>
+      <td class="down">-5.88%</td>
+      <td>2026/05/05 08:33:02</td>
+      <td>2026/05/05 17:32:59</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>ZEREBRO</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.036562</td>
+      <td>0.036404</td>
+      <td class="down">-0.43U</td>
+      <td class="down">-0.43%</td>
+      <td>2026/05/05 14:33:02</td>
+      <td>2026/05/05 15:03:02</td>
+      <td>触发上涨止盈信号，平仓</td>
+    </tr>
+    <tr>
+      <td>ZEREBRO</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.036449</td>
+      <td>0.033721</td>
+      <td class="down">-7.48U</td>
+      <td class="down">-7.48%</td>
+      <td>2026/05/05 11:03:01</td>
+      <td>2026/05/05 11:33:00</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>BAS</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.017906</td>
+      <td>0.019124</td>
+      <td class="down">-6.80U</td>
+      <td class="down">-6.80%</td>
+      <td>2026/05/05 08:33:02</td>
+      <td>2026/05/05 11:33:00</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>SWARMS</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.031389</td>
+      <td>0.035207</td>
+      <td class="up">+12.16U</td>
+      <td class="up">+12.16%</td>
+      <td>2026/05/05 03:33:02</td>
+      <td>2026/05/05 09:33:01</td>
+      <td>触发上涨止盈信号，平仓</td>
+    </tr>
+    <tr>
+      <td>ACX</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.0444</td>
+      <td>0.044</td>
+      <td class="down">-0.90U</td>
+      <td class="down">-0.90%</td>
+      <td>2026/05/04 09:33:02</td>
+      <td>2026/05/05 08:33:02</td>
+      <td>移出机会看涨列表，平仓</td>
+    </tr>
+    <tr>
+      <td>SWARMS</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.031587</td>
+      <td>0.031645</td>
+      <td class="up">+0.18U</td>
+      <td class="up">+0.18%</td>
+      <td>2026/05/04 23:03:02</td>
+      <td>2026/05/05 03:03:02</td>
+      <td>移出机会看涨列表，平仓</td>
+    </tr>
+    <tr>
+      <td>AIOT</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.10635</td>
+      <td>0.10632</td>
+      <td class="down">-0.03U</td>
+      <td class="down">-0.03%</td>
+      <td>2026/05/04 22:33:02</td>
+      <td>2026/05/05 01:33:01</td>
+      <td>移出机会看涨列表，平仓</td>
+    </tr>
+    <tr>
+      <td>AIOT</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.1078</td>
+      <td>0.10605</td>
+      <td class="down">-1.62U</td>
+      <td class="down">-1.62%</td>
+      <td>2026/05/04 20:33:02</td>
+      <td>2026/05/04 21:33:02</td>
+      <td>移出机会看涨列表，平仓</td>
+    </tr>
+    <tr>
+      <td>AIOT</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.11198</td>
+      <td>0.10561</td>
+      <td class="down">-5.69U</td>
+      <td class="down">-5.69%</td>
+      <td>2026/05/04 16:33:02</td>
+      <td>2026/05/04 19:03:02</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>ZBT</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.1879</td>
+      <td>0.202</td>
+      <td class="down">-7.50U</td>
+      <td class="down">-7.50%</td>
+      <td>2026/05/04 08:33:02</td>
+      <td>2026/05/04 17:33:02</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>LUNC</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.000085</td>
+      <td>0.00009</td>
+      <td class="down">-5.81U</td>
+      <td class="down">-5.81%</td>
+      <td>2026/05/04 08:33:02</td>
+      <td>2026/05/04 14:33:02</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>AXL</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.073</td>
+      <td>0.0785</td>
+      <td class="down">-7.53U</td>
+      <td class="down">-7.53%</td>
+      <td>2026/05/04 08:33:02</td>
+      <td>2026/05/04 09:33:02</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>ACX</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.044</td>
+      <td>0.0439</td>
+      <td class="down">-0.23U</td>
+      <td class="down">-0.23%</td>
+      <td>2026/05/04 06:03:02</td>
+      <td>2026/05/04 08:33:02</td>
+      <td>移出机会看涨列表，平仓</td>
+    </tr>
+    <tr>
+      <td>ACX</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.0439</td>
+      <td>0.044</td>
+      <td class="up">+0.23U</td>
+      <td class="up">+0.23%</td>
+      <td>2026/05/04 03:03:03</td>
+      <td>2026/05/04 03:33:02</td>
+      <td>移出机会看涨列表，平仓</td>
+    </tr>
+    <tr>
+      <td>ZBT</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.1893</td>
+      <td>0.1947</td>
+      <td class="down">-2.85U</td>
+      <td class="down">-2.85%</td>
+      <td>2026/05/03 08:33:02</td>
+      <td>2026/05/04 02:33:01</td>
+      <td>移出机会看跌列表，平仓</td>
+    </tr>
+    <tr>
+      <td>ACX</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.0442</td>
+      <td>0.044</td>
+      <td class="down">-0.45U</td>
+      <td class="down">-0.45%</td>
+      <td>2026/05/03 20:03:01</td>
+      <td>2026/05/04 02:33:01</td>
+      <td>移出机会看涨列表，平仓</td>
+    </tr>
+    <tr>
+      <td>H</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.18771</td>
+      <td>0.198</td>
+      <td class="down">-5.48U</td>
+      <td class="down">-5.48%</td>
+      <td>2026/05/02 23:03:02</td>
+      <td>2026/05/04 02:03:02</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>MAGMA</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.26638</td>
+      <td>0.25294</td>
+      <td class="down">-5.05U</td>
+      <td class="down">-5.05%</td>
+      <td>2026/05/03 15:33:02</td>
+      <td>2026/05/03 22:03:02</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>ACX</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.044</td>
+      <td>0.044</td>
+      <td class="up">+0.00U</td>
+      <td class="up">+0.00%</td>
+      <td>2026/05/03 18:33:02</td>
+      <td>2026/05/03 19:33:02</td>
+      <td>移出机会看涨列表，平仓</td>
+    </tr>
+    <tr>
+      <td>BAS</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.015828</td>
+      <td>0.017408</td>
+      <td class="down">-9.98U</td>
+      <td class="down">-9.98%</td>
+      <td>2026/05/03 13:33:02</td>
+      <td>2026/05/03 15:03:02</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>GWEI</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.10621</td>
+      <td>0.1142</td>
+      <td class="down">-7.52U</td>
+      <td class="down">-7.52%</td>
+      <td>2026/05/03 08:33:02</td>
+      <td>2026/05/03 15:03:02</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>ZBT</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.1899</td>
+      <td>0.204</td>
+      <td class="down">-7.42U</td>
+      <td class="down">-7.42%</td>
+      <td>2026/05/02 08:33:02</td>
+      <td>2026/05/02 23:03:02</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>CROSS</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.10574</td>
+      <td>0.10736</td>
+      <td class="down">-1.53U</td>
+      <td class="down">-1.53%</td>
+      <td>2026/04/30 18:03:02</td>
+      <td>2026/05/02 21:03:02</td>
+      <td>移出机会看跌列表，平仓</td>
+    </tr>
+    <tr>
+      <td>BAS</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.016392</td>
+      <td>0.016695</td>
+      <td class="down">-1.85U</td>
+      <td class="down">-1.85%</td>
+      <td>2026/05/02 11:33:03</td>
+      <td>2026/05/02 13:33:02</td>
+      <td>移出机会看跌列表，平仓</td>
+    </tr>
+    <tr>
+      <td>KNC</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.1529</td>
+      <td>0.1822</td>
+      <td class="up">+19.16U</td>
+      <td class="up">+19.16%</td>
+      <td>2026/05/02 11:33:03</td>
+      <td>2026/05/02 12:33:01</td>
+      <td>触发上涨止盈信号，平仓</td>
+    </tr>
+    <tr>
+      <td>GWEI</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.10291</td>
+      <td>0.10822</td>
+      <td class="down">-5.16U</td>
+      <td class="down">-5.16%</td>
+      <td>2026/05/02 01:33:02</td>
+      <td>2026/05/02 08:03:02</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>LUNC</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.000071</td>
+      <td>0.00007</td>
+      <td class="up">+2.00U</td>
+      <td class="up">+2.00%</td>
+      <td>2026/05/01 21:33:02</td>
+      <td>2026/05/02 02:33:01</td>
+      <td>移出机会看跌列表，平仓</td>
+    </tr>
+    <tr>
+      <td>ACX</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.0442</td>
+      <td>0.0437</td>
+      <td class="down">-1.13U</td>
+      <td class="down">-1.13%</td>
+      <td>2026/05/02 01:03:02</td>
+      <td>2026/05/02 02:03:02</td>
+      <td>移出机会看涨列表，平仓</td>
+    </tr>
+    <tr>
+      <td>MAGMA</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.25564</td>
+      <td>0.24082</td>
+      <td class="down">-5.80U</td>
+      <td class="down">-5.80%</td>
+      <td>2026/05/01 16:03:02</td>
+      <td>2026/05/01 21:03:02</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>ZEREBRO</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.031945</td>
+      <td>0.035491</td>
+      <td class="up">+11.10U</td>
+      <td class="up">+11.10%</td>
+      <td>2026/05/01 13:03:01</td>
+      <td>2026/05/01 14:33:01</td>
+      <td>触发上涨止盈信号，平仓</td>
+    </tr>
+    <tr>
+      <td>ZBT</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.1771</td>
+      <td>0.1879</td>
+      <td class="down">-6.10U</td>
+      <td class="down">-6.10%</td>
+      <td>2026/05/01 05:03:02</td>
+      <td>2026/05/01 11:03:01</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr>
+    <tr>
+      <td>ORCA</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>1.989</td>
+      <td>2.126</td>
+      <td class="up">+6.89U</td>
+      <td class="up">+6.89%</td>
+      <td>2026/05/01 07:33:02</td>
+      <td>2026/05/01 08:03:02</td>
+      <td>触发上涨止盈信号，平仓</td>
+    </tr>
+    <tr>
+      <td>H</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.17938</td>
+      <td>0.17845</td>
+      <td class="up">+0.52U</td>
+      <td class="up">+0.52%</td>
+      <td>2026/04/30 10:33:01</td>
+      <td>2026/05/01 04:03:02</td>
+      <td>移出机会看跌列表，平仓</td>
+    </tr>
+    <tr>
+      <td>BR</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.14573</td>
+      <td>0.1643</td>
+      <td class="up">+12.74U</td>
+      <td class="up">+12.74%</td>
+      <td>2026/05/01 00:33:02</td>
+      <td>2026/05/01 02:03:02</td>
+      <td>触发上涨止盈信号，平仓</td>
+    </tr>
+    <tr>
+      <td>SKYAI</td>
+      <td><span class="badge long">多</span></td>
+      <td>100.00U</td>
+      <td>0.32092</td>
+      <td>0.34858</td>
+      <td class="up">+8.62U</td>
+      <td class="up">+8.62%</td>
+      <td>2026/04/30 17:33:02</td>
+      <td>2026/05/01 00:33:02</td>
+      <td>触发上涨止盈信号，平仓</td>
+    </tr>
+    <tr>
+      <td>OPEN</td>
+      <td><span class="badge short">空</span></td>
+      <td>100.00U</td>
+      <td>0.2601</td>
+      <td>0.275</td>
+      <td class="down">-5.73U</td>
+      <td class="down">-5.73%</td>
+      <td>2026/04/30 13:33:02</td>
+      <td>2026/04/30 19:03:02</td>
+      <td>亏损达到 5%，止损平仓</td>
+    </tr></tbody>
+        </table>
+      </div>
+    </div>
+  </body>
+  </html>
